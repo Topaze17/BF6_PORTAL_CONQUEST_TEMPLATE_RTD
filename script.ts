@@ -1,4 +1,5 @@
 import * as modlib from "./modlib"
+import * as mod from "./types/mod/index";
 //Color Vector
 const blueColor = mod.CreateVector(0.439, 0.922, 1)
 const grayColor = mod.CreateVector(0.212, 0.224, 0.235)

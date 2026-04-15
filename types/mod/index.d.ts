@@ -25904,4 +25904,6 @@ declare namespace mod {
         // This will trigger when a Vehicle is called into the map.
         export function OnVehicleSpawned(eventVehicle: mod.Vehicle): void;
     }
+    
 }
+export = mod;
