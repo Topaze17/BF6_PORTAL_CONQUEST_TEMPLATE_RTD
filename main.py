@@ -5,12 +5,15 @@ for i in range(65,91):
    dictionaire[chr(i)] = chr(i)
 dictionaire["letter"] = "letter"
 dictionaire["circle_outline"] = "circle_outline"
+dictionaire["circle_inside"] = "circle_inside"
 dictionaire["pt"] = "●"
+dictionaire["rectangle_outline"] = "rectangle_outline"
+dictionaire["rectangle_inside"] = "rectangle_inside"
 dictionaire["enemy"] = "enemy"
 dictionaire["neutral"] = "neutral"
 dictionaire["ally"] = "ally"
-dictionaire["base"] = "base"
-dictionaire["diamond"] = "\u25c6"
+dictionaire["natoFlags"] = "nato_flags"
+dictionaire["paxFlags"] = "pax_flags"
 file = open("Strings.json", "w")
 json.dump(dictionaire, file)
 dictionaire = {}
