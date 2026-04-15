@@ -1,4 +1,6 @@
+//change to "modlib" when charging on serv
 import * as modlib from "./modlib"
+//remove when charging to serv
 import * as mod from "./types/mod/index";
 //Color Vector
 const blueColor = mod.CreateVector(0.439, 0.922, 1)
