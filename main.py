@@ -14,6 +14,14 @@ dictionaire["neutral"] = "neutral"
 dictionaire["ally"] = "ally"
 dictionaire["natoFlags"] = "nato_flags"
 dictionaire["paxFlags"] = "pax_flags"
+dictionaire["score_line_enemy"] = "score_line_enemy"
+dictionaire["score_line_ally"] = "score_line_enemy"
+dictionaire["score_backround_line_enemy"] = "score_backround_line_enemy"
+dictionaire["score_backround_line_ally"] = "score_backround_line_ally"
+dictionaire["score_base_score_num_enemy"] = "score_base_score_num_enemy"
+dictionaire["score_base_score_num_ally"] = "score_base_score_num_ally"
+dictionaire["score_num"] = "score_num"
+dictionaire["empty"] = "{}"
 file = open("Strings.json", "w")
 json.dump(dictionaire, file)
 dictionaire = {}
