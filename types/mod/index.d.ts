@@ -25867,6 +25867,7 @@ declare namespace mod {
         // This will trigger when any player leaves the game.
         export function OnPlayerLeaveGame(eventNumber: number): void;
 
+
         // This will trigger when a Player changes team.
         export function OnPlayerSwitchTeam(eventPlayer: mod.Player, eventTeam: mod.Team): void;
 

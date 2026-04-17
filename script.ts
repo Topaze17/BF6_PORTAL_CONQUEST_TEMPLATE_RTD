@@ -10,6 +10,8 @@ const redColor = mod.CreateVector(1, 0.514, 0.38)
 const darkRedColor = mod.CreateVector(0.251, 0.094, 0.067)
 const blackColor = mod.CreateVector(0.031, 0.031, 0.031)
 const whiteColor = mod.CreateVector(1,1,1)
+const whiteToBlue16Step = mod.Divide(mod.Subtract(blueColor, whiteColor), 16)
+const whiteToRed16Step = mod.Divide(mod.Subtract(redColor, whiteColor), 16)
 //Global Variable
 const isGameModeReady = mod.GlobalVariable(1)
 const flagBlinking = mod.GlobalVariable(2)
@@ -27,6 +29,12 @@ const scoreWidgetsPax = mod.GlobalVariable(12)
 function natoPlayersOnCapturePoint(capturePoint : mod.CapturePoint) : mod.Variable {return mod.ObjectVariable(capturePoint, 1)}
 function paxPlayersOnCapturePoint(capturePoint : mod.CapturePoint) : mod.Variable {return mod.ObjectVariable(capturePoint, 2)}
 function flagOfCapturePoint(capturePoint : mod.CapturePoint) : mod.Variable {return mod.ObjectVariable(capturePoint, 3)}
+function teamCapturingCapturePoint(capturePoint : mod.CapturePoint) : mod.Variable {return mod.ObjectVariable(capturePoint, 4)}
+function oldCaptureStepCapturePoint(capturePoint : mod.CapturePoint) : mod.Variable {return mod.ObjectVariable(capturePoint, 5)}
+function onFlagPlayerWidgets(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 1)}
+function playerUiAnchor(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 2)}
+function playerIsOnFlag(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 4)}
+function playerWasInjuredOnflag(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 3)}
 //Enum
 enum Team {
     Neutral,
@@ -58,6 +66,7 @@ export function OnGameModeStarted(): void {
     mod.EnableGameModeObjective(mod.GetSector(300), true)
     for(let x = 0; x < mod.CountOf(mod.AllCapturePoints()); x += 1) {
         const capturePoint = mod.ValueInArray(mod.AllCapturePoints(), x)  
+        const teamFlagOwner = mod.GetObjId(mod.GetCurrentOwnerTeam(capturePoint))
         mod.SetVariable(flagOfCapturePoint(capturePoint), x)
         mod.SetVariable(natoPlayersOnCapturePoint(capturePoint), mod.EmptyArray())
         mod.SetVariable(paxPlayersOnCapturePoint(capturePoint), mod.EmptyArray())
@@ -66,10 +75,22 @@ export function OnGameModeStarted(): void {
         mod.SetCapturePointCapturingTime(capturePoint, 15)
         mod.SetCapturePointNeutralizationTime(capturePoint, 15)
         mod.SetMaxCaptureMultiplier(capturePoint, 2)
-        setFlagOwner(x, mod.GetObjId(mod.GetCurrentOwnerTeam(capturePoint)))
+        mod.SetVariable(teamCapturingCapturePoint(capturePoint), teamFlagOwner)
+        setFlagOwner(x, teamFlagOwner)
     }
     mod.SetVariable(isGameModeReady, 1)
 
+}
+
+ export function OnCapturePointCapturing(eventCapturePoint: mod.CapturePoint): void {
+    mod.SetVariable(teamCapturingCapturePoint(eventCapturePoint), mod.GetOwnerProgressTeam(eventCapturePoint))
+ }
+
+export function OnPlayerJoinGame(eventPlayer: mod.Player): void {
+    mod.SetVariable(playerIsOnFlag(eventPlayer), -1)
+    mod.SetVariable(playerWasInjuredOnflag(eventPlayer), -1)
+    makeUiAnchorPlayer(eventPlayer)
+    makeOnFlagUiLayer(eventPlayer)
 }
 
 export function OnPlayerDeployed(eventPlayer: mod.Player): void { 
@@ -80,37 +101,46 @@ export function OnPlayerDeployed(eventPlayer: mod.Player): void {
 export function OnCapturePointLost(eventCapturePoint: mod.CapturePoint): void {
     const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
     setFlagOwner(flag, mod.GetObjId(mod.GetCurrentOwnerTeam(eventCapturePoint)))
+    notifyOnFlagPlayersOfStateChange(eventCapturePoint)
 }
+
 export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint): void {
     const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
     setFlagBlink(flag, false);
     setFlagOwner(flag, mod.GetObjId(mod.GetCurrentOwnerTeam(eventCapturePoint)))
+    notifyOnFlagPlayersOfStateChange(eventCapturePoint)
 }
+
 export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint): void {
+    const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
+    mod.SetVariable(playerIsOnFlag(eventPlayer), flag)
     if(mod.GetObjId(mod.GetTeam(eventPlayer)) == Team.Nato) {
         mod.SetVariable(natoPlayersOnCapturePoint(eventCapturePoint), mod.AppendToArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)) , eventPlayer))
     }
     else {
         mod.SetVariable(paxPlayersOnCapturePoint(eventCapturePoint), mod.AppendToArray(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)) , eventPlayer))
     }
-    const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
     const capturePointOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
-    const nbNatoPlayers = mod.CountOf(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)))
-    const nbPaxPlayers = mod.CountOf(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)))
+    const nbNatoPlayersNotDown = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown))))
+    const nbPaxPlayersNotDown = mod.CountOf(modlib.FilteredArray(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown))))
+    notifyPlayersOfPopulationChangeOnFlag(eventCapturePoint)
+    displayOnFlagLayer(eventPlayer, flag)
     if(mod.Not(mod.ValueInArray(mod.GetVariable(isFlagBlinking), flag))) {
-        if(capturePointOwner == Team.Nato &&  nbPaxPlayers != 0) {
+        if(capturePointOwner == Team.Nato &&  nbPaxPlayersNotDown != 0) {
             setFlagBlink(flag, true)
         }
-        else if(capturePointOwner == Team.Pax &&  nbNatoPlayers != 0) {
+        else if(capturePointOwner == Team.Pax &&  nbNatoPlayersNotDown != 0) {
             setFlagBlink(flag, true)
         }
-        else if(capturePointOwner == Team.Neutral && (nbNatoPlayers != 0 || nbPaxPlayers != 0)){
+        else if(capturePointOwner == Team.Neutral && (nbNatoPlayersNotDown != 0 || nbPaxPlayersNotDown != 0)){
             setFlagBlink(flag, true)
         }
     }
 }
+
 export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint): void {
     const playerId = mod.GetObjId(eventPlayer)
+    mod.SetVariable(playerIsOnFlag(eventPlayer), -1)
     if(mod.GetObjId(mod.GetTeam(eventPlayer)) == Team.Nato) {
         mod.SetVariable(natoPlayersOnCapturePoint(eventCapturePoint), modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)) , (currentElement) => mod.GetObjId(currentElement) != playerId))
     }
@@ -119,16 +149,18 @@ export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePo
     }
     const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
     const capturePointOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
-    const nbNatoPlayers = mod.CountOf(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)))
-    const nbPaxPlayers = mod.CountOf(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)))
+    const nbNatoPlayersNotDown = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown))))
+    const nbPaxPlayersNotDown = mod.CountOf(modlib.FilteredArray(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown))))
+    removeFromViewOnFlagLayer(eventPlayer)
+    notifyPlayersOfPopulationChangeOnFlag(eventCapturePoint)
     if(mod.ValueInArray(mod.GetVariable(isFlagBlinking), flag)) {
-        if(capturePointOwner == Team.Nato &&  nbPaxPlayers == 0) {
+        if(capturePointOwner == Team.Nato &&  nbPaxPlayersNotDown == 0) {
             setFlagBlink(flag, false)
         }
-        else if(capturePointOwner == Team.Pax &&  nbNatoPlayers == 0) {
+        else if(capturePointOwner == Team.Pax &&  nbNatoPlayersNotDown == 0) {
             setFlagBlink(flag, false)
         }
-        else if(nbNatoPlayers == 0 && nbPaxPlayers == 0){
+        else if(nbNatoPlayersNotDown == 0 && nbPaxPlayersNotDown == 0){
             setFlagBlink(flag, false)
         }
     }
@@ -144,50 +176,89 @@ export async function OngoingGlobal(): Promise<void> {
     }
 
 }
-export function OnMandown(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
+/*export async function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint): Promise<void> {
+    const oldCaptureStep = mod.GetVariable(oldCaptureStepCapturePoint(eventCapturePoint))
+    if(oldCaptureStep != 1 && oldCaptureStep != 0) {
+        const newCaptureState = mod.Floor(mod.GetCaptureProgress(eventCapturePoint) / 0.0625)
+
+    }
+}*/
+export function OnPlayerDied(eventPlayer: mod.Player,eventOtherPlayer: mod.Player,eventDeathType: mod.DeathType,eventWeaponUnlock: mod.WeaponUnlock): void {
     removePlayerFromCapturePointIfNecessary(eventPlayer)
 }
-
-function removePlayerFromCapturePointIfNecessary(player : mod.Player) {
-    const playerId = mod.GetObjId(player)
-    const capturePoints = mod.AllCapturePoints()
-    const nbCapturePoints = mod.CountOf(capturePoints)
-    const playerTeamId = mod.GetObjId(mod.GetTeam(player))
-    for(let x = 0; x < nbCapturePoints; x += 1) {
-        const currCapturePoint = mod.ValueInArray(capturePoints, x)
-        let capturePointPlayersArray = mod.EmptyArray()
-        if(playerTeamId == Team.Nato) {
-            capturePointPlayersArray = mod.GetVariable(natoPlayersOnCapturePoint(currCapturePoint))
+export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
+    const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer)) 
+    if(playerFlag != -1) {
+        displayOnFlagLayer(eventPlayer, playerFlag)
+    }
+}
+export function OnMandown(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
+    const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer))
+    if(playerFlag != -1) {
+        removeFromViewOnFlagLayer(eventPlayer)
+        notifyPlayersOfPopulationChangeOnFlag(mod.ValueInArray(mod.AllCapturePoints(), playerFlag))
+    }
+}
+function notifyOnFlagPlayersOfStateChange(capturePoint : mod.CapturePoint) {
+    const flag = mod.GetVariable(flagOfCapturePoint(capturePoint))
+    const natoPlayers = mod.GetVariable(natoPlayersOnCapturePoint(capturePoint))
+    const paxPlayers = mod.GetVariable(paxPlayersOnCapturePoint(capturePoint))
+    for(let x = 0; x < mod.CountOf(natoPlayers); x += 1) {
+        const currPlayer = mod.ValueInArray(natoPlayers, x)
+        if(mod.Not(mod.GetSoldierState(currPlayer, mod.SoldierStateBool.IsManDown))) {
+            displayOnFlagLayer(currPlayer, flag)
         }
-        else {
-            capturePointPlayersArray = mod.GetVariable(paxPlayersOnCapturePoint(currCapturePoint))
-        }
-        if(modlib.IsTrueForAny(capturePointPlayersArray, (other) => mod.GetObjId(other) == playerId)) {
-            capturePointPlayersArray = modlib.FilteredArray(capturePointPlayersArray, (other) => mod.GetObjId(other) != playerId)
-            if(playerTeamId == Team.Nato) {
-                mod.SetVariable(natoPlayersOnCapturePoint(currCapturePoint), capturePointPlayersArray)
-            }
-            else {
-                mod.SetVariable(paxPlayersOnCapturePoint(currCapturePoint), capturePointPlayersArray)
-            }
-            const flag = mod.GetVariable(flagOfCapturePoint(currCapturePoint))
-            const capturePointOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
-            const nbNatoPlayers = mod.CountOf(mod.GetVariable(natoPlayersOnCapturePoint(currCapturePoint)))
-            const nbPaxPlayers = mod.CountOf(mod.GetVariable(paxPlayersOnCapturePoint(currCapturePoint)))
-            if(mod.ValueInArray(mod.GetVariable(isFlagBlinking), flag)) {
-                if(capturePointOwner == Team.Nato &&  nbPaxPlayers == 0) {
-                    setFlagBlink(flag, false)
-                }
-                else if(capturePointOwner == Team.Pax &&  nbNatoPlayers == 0) {
-                    setFlagBlink(flag, false)
-                }
-                else if(nbNatoPlayers == 0 && nbPaxPlayers == 0){
-                    setFlagBlink(flag, false)
-                }
-            }
-            break
+        
+    }
+    for(let x = 0; x < mod.CountOf(paxPlayers); x += 1) {
+        const currPlayer = mod.ValueInArray(paxPlayers, x)
+        if(mod.Not(mod.GetSoldierState(currPlayer, mod.SoldierStateBool.IsManDown))) {
+            displayOnFlagLayer(currPlayer, flag)
         }
     }
+}
+function removePlayerFromCapturePointIfNecessary(player : mod.Player) : number{
+    const playerFlag = mod.GetVariable(playerIsOnFlag(player))
+    if(playerFlag != -1) {
+        const playerId = mod.GetObjId(player)
+        const capturePoints = mod.AllCapturePoints()
+        const playerTeamId = mod.GetObjId(mod.GetTeam(player))
+        const currCapturePoint = mod.ValueInArray(capturePoints, playerFlag)
+            let capturePointPlayersArray = mod.EmptyArray()
+            if(playerTeamId == Team.Nato) {
+                capturePointPlayersArray = mod.GetVariable(natoPlayersOnCapturePoint(currCapturePoint))
+            }
+            else {
+                capturePointPlayersArray = mod.GetVariable(paxPlayersOnCapturePoint(currCapturePoint))
+            }
+            if(modlib.IsTrueForAny(capturePointPlayersArray, (other) => mod.GetObjId(other) == playerId)) {
+                capturePointPlayersArray = modlib.FilteredArray(capturePointPlayersArray, (other) => mod.GetObjId(other) != playerId)
+                if(playerTeamId == Team.Nato) {
+                    mod.SetVariable(natoPlayersOnCapturePoint(currCapturePoint), capturePointPlayersArray)
+                }
+                else {
+                    mod.SetVariable(paxPlayersOnCapturePoint(currCapturePoint), capturePointPlayersArray)
+                }
+                const flag = mod.GetVariable(flagOfCapturePoint(currCapturePoint))
+                const capturePointOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
+                const nbNatoPlayers = mod.CountOf(mod.GetVariable(natoPlayersOnCapturePoint(currCapturePoint)))
+                const nbPaxPlayers = mod.CountOf(mod.GetVariable(paxPlayersOnCapturePoint(currCapturePoint)))
+                if(mod.ValueInArray(mod.GetVariable(isFlagBlinking), flag)) {
+                    if(capturePointOwner == Team.Nato &&  nbPaxPlayers == 0) {
+                        setFlagBlink(flag, false)
+                    }
+                    else if(capturePointOwner == Team.Pax &&  nbNatoPlayers == 0) {
+                        setFlagBlink(flag, false)
+                    }
+                    else if(nbNatoPlayers == 0 && nbPaxPlayers == 0){
+                        setFlagBlink(flag, false)
+                    }
+                }
+                removeFromViewOnFlagLayer(player)
+                return flag
+            }
+        }
+    return -1
 }
 //Make asumption that you do not change to the same team
 function setFlagOwner(flag: number, team : number) {
@@ -388,6 +459,85 @@ async function blink() {
         return [widgets, aplhas, isContainers]
 
     }
+    function updatePlayerOnFlagLayer(player : mod.Player, nbPaxPlayers: number, nbNatoPlayer: number, flag: number) {
+        const allKeys = Object.keys(mod.stringkeys)
+        const flagOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
+        const flagLetter = allKeys[flag]
+        const playerOnFlagWidget = mod.GetVariable(onFlagPlayerWidgets(player))
+        const totalPlayerOnFlag = nbPaxPlayers + nbNatoPlayer
+        const lineSizePerPlayer = 89 / totalPlayerOnFlag
+        const playerTeamId = mod.GetObjId(mod.GetTeam(player))
+        let nbAllyPlayers = nbNatoPlayer
+        let nbEnemyPlayers = nbPaxPlayers
+        if(playerTeamId == Team.Pax) {
+            nbAllyPlayers = nbPaxPlayers
+            nbEnemyPlayers = nbNatoPlayer
+        }
+        if(nbEnemyPlayers == 0) {
+             mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 13), false)
+        }
+        else {
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 13), true)
+        }
+        mod.SetUIWidgetSize(mod.ValueInArray(playerOnFlagWidget, 14), mod.CreateVector(lineSizePerPlayer * nbAllyPlayers,6,0))
+        mod.SetUIWidgetSize(mod.ValueInArray(playerOnFlagWidget, 15), mod.CreateVector(lineSizePerPlayer * nbEnemyPlayers,6,0))
+        mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 16), mod.Message(nbAllyPlayers))
+        mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 17), mod.Message(nbEnemyPlayers))
+        mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 8), mod.Message(flagLetter))
+        mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 12), mod.Message(flagLetter))
+        mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 4), mod.Message(flagLetter))
+        if(flagOwner == Team.Neutral) {
+            mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 18), mod.Message(mod.stringkeys.capturing))
+        }
+        else if(playerTeamId != flagOwner) {
+            mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 18), mod.Message(mod.stringkeys.capturing))
+        }
+        else {
+            mod.SetUITextLabel(mod.ValueInArray(playerOnFlagWidget, 18), mod.Message(mod.stringkeys.defending))
+        }
+    }
+    function notifyPlayersOfPopulationChangeOnFlag(capturePoint: mod.CapturePoint) {
+        const flag = mod.GetVariable(flagOfCapturePoint(capturePoint))
+        const natoPlayers = mod.GetVariable(natoPlayersOnCapturePoint(capturePoint))
+        const paxPlayers = mod.GetVariable(paxPlayersOnCapturePoint(capturePoint))
+        const nbNatoDownPlayers = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
+        const nbPaxDownPlayers = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
+        const nbNatoPlayers = mod.CountOf(natoPlayers)
+        const nbPaxPlayers = mod.CountOf(paxPlayers)
+        for(let x = 0; x < mod.CountOf(natoPlayers); x += 1) {
+            const currPlayer = mod.ValueInArray(natoPlayers, x)
+            updatePlayerOnFlagLayer(currPlayer, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag)
+        }
+        for(let x = 0; x < mod.CountOf(paxPlayers); x += 1) {
+            const currPlayer = mod.ValueInArray(paxPlayers, x)
+            updatePlayerOnFlagLayer(currPlayer, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag)
+        }
+    }
+    function displayOnFlagLayer(player : mod.Player, flag: number) {
+        const playerOnFlagWidget = mod.GetVariable(onFlagPlayerWidgets(player))
+        const flagOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
+        const playerTeamId = mod.GetObjId(mod.GetTeam(player))
+        mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 0), true)
+        if(flagOwner == Team.Neutral) {
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 1), false)
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 5), true)
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 9), false)
+        }
+        else if(playerTeamId != flagOwner) {
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 1), false)
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 5), false)
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 9), true)
+        }
+        else {
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 1), true)
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 5), false)
+            mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 9), false)
+        }
+    }
+        function removeFromViewOnFlagLayer(player : mod.Player) {
+        const playerOnFlagWidget = mod.GetVariable(onFlagPlayerWidgets(player))
+        mod.SetUIWidgetVisible(mod.ValueInArray(playerOnFlagWidget, 0), false)
+    }
     //--------UI FONCTION---------------//
     function makeFlagUiLayer(nb_flag : number) {
         const neutralFlags = makeNeutralFlagUiLayer(nb_flag)
@@ -523,21 +673,44 @@ async function blink() {
                 teamOwner = mod.GetTeam(teamId)
             }
             const highestUiLayer = mod.ValueInArray(mod.GetVariable(uiAnchors), teamId)
-            mod.AddUIContainer(mod.stringkeys.score_line_ally, mod.CreateVector(-183,65, 0), mod.CreateVector(0,12,0), mod.UIAnchor.Center, highestUiLayer, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_line_ally, mod.CreateVector(-183,65, 0), mod.CreateVector(180,12,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
             const scoreLineAlly = mod.FindUIWidgetWithName(mod.stringkeys.score_line_ally)
-            mod.AddUIContainer(mod.stringkeys.score_line_enemy, mod.CreateVector(3,65, 0), mod.CreateVector(0,12,0), mod.UIAnchor.Center, highestUiLayer, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_line_enemy, mod.CreateVector(3,65, 0), mod.CreateVector(180,12,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
             const scoreLineEnemy = mod.FindUIWidgetWithName(mod.stringkeys.score_line_enemy)
+
             mod.AddUIContainer(mod.stringkeys.score_backround_line_ally, mod.CreateVector(-183,65, 0), mod.CreateVector(180,12,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, darkBlueColor, 0.8, mod.UIBgFill.Blur, teamOwner)
             mod.AddUIContainer(mod.stringkeys.score_backround_line_enemy, mod.CreateVector(3,65, 0), mod.CreateVector(180,12,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, darkRedColor, 0.8, mod.UIBgFill.Blur, teamOwner)
-            mod.AddUIContainer(mod.stringkeys.score_base_score_num_ally, mod.CreateVector(-272,54, 0), mod.CreateVector(84,33,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, darkBlueColor, 0.8, mod.UIBgFill.Blur, teamOwner)
-            const scoreBaseAlly = mod.FindUIWidgetWithName(mod.stringkeys.score_base_score_num_ally)
-            mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, scoreBaseAlly, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(1000), 30, blueColor, 1, mod.UIAnchor.Center, teamOwner)
+
+            mod.AddUIContainer(mod.stringkeys.score_base_score_num_ally, mod.CreateVector(-276,54, 0), mod.CreateVector(84,33,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, darkBlueColor, 0.8, mod.UIBgFill.Blur, teamOwner)
+            const scoreBaseAlly = mod.FindUIWidgetWithName(mod.stringkeys.score_base_score_num_ally, highestUiLayer)
+            mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, scoreBaseAlly, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(1000), 35, blueColor, 1, mod.UIAnchor.Center, teamOwner)
             const scoreTextAlly = mod.FindUIWidgetWithName(mod.stringkeys.letter, scoreBaseAlly)
+
             mod.AddUIContainer(mod.stringkeys.score_base_score_num_enemy, mod.CreateVector(191,54, 0), mod.CreateVector(84,33,0), mod.UIAnchor.TopLeft, highestUiLayer, true, 0, darkRedColor, 0.8, mod.UIBgFill.Blur, teamOwner)
-            const scoreBaseEnemy = mod.FindUIWidgetWithName(mod.stringkeys.score_base_score_num_enemy)
-            mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, scoreBaseEnemy, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(1000), 30, redColor, 1, mod.UIAnchor.Center, teamOwner)
+            const scoreBaseEnemy = mod.FindUIWidgetWithName(mod.stringkeys.score_base_score_num_enemy, highestUiLayer)
+            mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, scoreBaseEnemy, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(1000), 35, redColor, 1, mod.UIAnchor.Center, teamOwner)
             const scoreTextEnemy = mod.FindUIWidgetWithName(mod.stringkeys.letter, scoreBaseEnemy)
-            const widgetsArray = mod.AppendToArray(mod.AppendToArray(mod.AppendToArray(mod.AppendToArray(mod.EmptyArray(), scoreLineAlly), scoreLineEnemy), scoreTextAlly), scoreTextEnemy)
+
+            mod.AddUIContainer(mod.stringkeys.score_outline_ally, mod.CreateVector(0,0, 0), mod.CreateVector(84,33,0), mod.UIAnchor.TopLeft, scoreBaseAlly, true, 0, blueColor, 0, mod.UIBgFill.None, teamOwner)
+            const scoreOutlineAlly = mod.FindUIWidgetWithName(mod.stringkeys.score_outline_ally, scoreBaseAlly)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(2,33,0), mod.UIAnchor.TopLeft, scoreOutlineAlly, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.TopLeft, scoreOutlineAlly, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.BottomLeft, scoreOutlineAlly, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(2,33,0), mod.UIAnchor.TopRight, scoreOutlineAlly, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.TopRight, scoreOutlineAlly, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.BottomRight, scoreOutlineAlly, true, 0, blueColor, 1, mod.UIBgFill.Solid, teamOwner)
+
+            mod.AddUIContainer(mod.stringkeys.score_outline_enemy, mod.CreateVector(0,0, 0), mod.CreateVector(84,33,0), mod.UIAnchor.TopLeft, scoreBaseEnemy, true, 0, redColor, 0, mod.UIBgFill.None, teamOwner)
+            const scoreOutlineEnemy = mod.FindUIWidgetWithName(mod.stringkeys.score_outline_enemy, scoreBaseEnemy)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(2,33,0), mod.UIAnchor.TopLeft, scoreOutlineEnemy, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.TopLeft, scoreOutlineEnemy, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.BottomLeft, scoreOutlineEnemy, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(2,33,0), mod.UIAnchor.TopRight, scoreOutlineEnemy, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.TopRight, scoreOutlineEnemy, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            mod.AddUIContainer(mod.stringkeys.score_outline_piece, mod.CreateVector(0,0, 0), mod.CreateVector(8,2,0), mod.UIAnchor.BottomRight, scoreOutlineEnemy, true, 0, redColor, 1, mod.UIBgFill.Solid, teamOwner)
+            
+            const widgetsArray = mod.AppendToArray(mod.AppendToArray(mod.AppendToArray(mod.AppendToArray(mod.AppendToArray(mod.AppendToArray(mod.EmptyArray(), scoreLineAlly), scoreLineEnemy), scoreTextAlly), scoreTextEnemy), scoreOutlineAlly), scoreOutlineEnemy)
+            
             if(teamId == Team.Nato) {
                 mod.SetVariable(scoreWidgetsNato, widgetsArray)
             }
@@ -546,4 +719,103 @@ async function blink() {
             }
         }
     }
+function makeUiAnchorPlayer(player: mod.Player) {
+    const allKeys = Object.keys(mod.stringkeys)
+    const playerId = mod.GetObjId(player)
+    const keyId = playerId + 26
+    mod.AddUIContainer(allKeys[keyId], mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, mod.GetUIRoot(), true, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.None, player)
+    const highestUiLayer = mod.FindUIWidgetWithName(allKeys[keyId])
+    mod.SetVariable(playerUiAnchor(player), highestUiLayer)
+}
+function makeOnFlagUiLayer(player : mod.Player) {
+    const anchor = mod.GetVariable(playerUiAnchor(player))
+    mod.AddUIContainer(mod.stringkeys.on_flag_layer, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, anchor, false, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.None, player)
+    const highestUiLayer = mod.FindUIWidgetWithName(mod.stringkeys.on_flag_layer, anchor)
+
+    // --- Ally Flag ---
+    const allyUiLayerName = mod.stringkeys.ally
+    mod.AddUIContainer(allyUiLayerName, mod.CreateVector(0,200,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, highestUiLayer, false, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, player)
+    const allyUiLayer = mod.FindUIWidgetWithName(allyUiLayerName, highestUiLayer)
+    
+    mod.AddUIText(mod.stringkeys.circle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 67, blueColor, 0.8, mod.UIAnchor.Center, player)
+    const allyOutline = mod.FindUIWidgetWithName(mod.stringkeys.circle_outline, allyUiLayer)
+    
+    mod.AddUIText(mod.stringkeys.circle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 60, blackColor, 0.9, mod.UIAnchor.Center,player)
+    const allyInside = mod.FindUIWidgetWithName(mod.stringkeys.circle_inside, allyUiLayer)
+    
+    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, blueColor, 0.8, mod.UIAnchor.Center, player)
+    const letterAlly = mod.FindUIWidgetWithName(mod.stringkeys.letter, allyUiLayer)
+
+    // --- Neutral Flag ---
+    const neutralUiLayerName = mod.stringkeys.neutral
+    mod.AddUIContainer(neutralUiLayerName, mod.CreateVector(0,200,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, highestUiLayer, true, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, player)
+    const neutralUiLayer = mod.FindUIWidgetWithName(neutralUiLayerName, highestUiLayer)
+    
+    mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(54,54,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, whiteColor, 0.8, mod.UIBgFill.Solid, player)
+    const neutralOutline = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_outline, neutralUiLayer)
+    
+    mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(49,49,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, blackColor, 0.8, mod.UIBgFill.Solid, player)
+    const neutralInside = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_inside, neutralUiLayer)
+    
+    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, whiteColor, 0.8, mod.UIAnchor.Center, player)
+    const letterNeutral = mod.FindUIWidgetWithName(mod.stringkeys.letter, neutralUiLayer)
+
+    // --- Enemy Flag ---
+    const enemyUiLayerName = mod.stringkeys.enemy
+    mod.AddUIContainer(enemyUiLayerName, mod.CreateVector(0,200,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, highestUiLayer, false, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, player)
+    const enemyUiLayer = mod.FindUIWidgetWithName(enemyUiLayerName, highestUiLayer)
+    
+    mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(54,54,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, redColor, 0.8, mod.UIBgFill.Solid, player)
+    const enemyOutline = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_outline, enemyUiLayer)
+    
+    mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(49,49,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, blackColor, 0.8, mod.UIBgFill.Solid, player)
+    const enemyInside = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_inside, enemyUiLayer)
+    
+    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, redColor, 0.8, mod.UIAnchor.Center, player)
+    const letterEnemy = mod.FindUIWidgetWithName(mod.stringkeys.letter, enemyUiLayer)
+
+    // --- Contestation Logic ---
+    mod.AddUIContainer(mod.stringkeys.contest_line, mod.CreateVector(0,238, 0), mod.CreateVector(89,6,0), mod.UIAnchor.TopCenter, highestUiLayer, true, 0, blueColor, 1, mod.UIBgFill.None, player)
+    const contestLine = mod.FindUIWidgetWithName(mod.stringkeys.contest_line, highestUiLayer)
+    
+    mod.AddUIContainer(mod.stringkeys.contest_line_ally, mod.CreateVector(0,0, 0), mod.CreateVector(89,6,0), mod.UIAnchor.TopLeft, contestLine, true, 0, blueColor, 1, mod.UIBgFill.Solid, player)
+    const contestLineAlly = mod.FindUIWidgetWithName(mod.stringkeys.contest_line_ally, contestLine)
+    
+    mod.AddUIContainer(mod.stringkeys.contest_line_enemy, mod.CreateVector(0,0, 0), mod.CreateVector(89,6,0), mod.UIAnchor.TopRight, contestLine, true, 0, redColor, 1, mod.UIBgFill.Solid, player)
+    const contestLineEnemy = mod.FindUIWidgetWithName(mod.stringkeys.contest_line_enemy, contestLine)
+    
+    mod.AddUIText(mod.stringkeys.contest_line_num_ally, mod.CreateVector(-13,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.CenterLeft, contestLine, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(2), 18, blueColor, 0.6, mod.UIAnchor.Center, player)
+    const contestNumAlly = mod.FindUIWidgetWithName(mod.stringkeys.contest_line_num_ally, contestLine)
+    
+    mod.AddUIText(mod.stringkeys.contest_line_num_enemy, mod.CreateVector(-13,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.CenterRight, contestLine, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(2), 18, redColor, 0.6, mod.UIAnchor.Center, player)
+    const contestNumEnemy = mod.FindUIWidgetWithName(mod.stringkeys.contest_line_num_enemy, contestLine)
+    
+    mod.AddUIText(mod.stringkeys.capture_point_msg, mod.CreateVector(0,-13, 0), mod.CreateVector(0,0,0), mod.UIAnchor.BottomCenter, contestLine, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.defending), 18, whiteColor, 0.6, mod.UIAnchor.Center, player)
+    const capturePointMsg = mod.FindUIWidgetWithName(mod.stringkeys.capture_point_msg, contestLine)
+
+    // --- Array Compilation ---
+    // Added: allyOutline, allyInside, neutralOutline, neutralInside, enemyOutline, enemyInside
+    let widgetsArray = mod.EmptyArray()
+    widgetsArray = mod.AppendToArray(widgetsArray, highestUiLayer) //0
+    widgetsArray = mod.AppendToArray(widgetsArray, allyUiLayer) //1
+    widgetsArray = mod.AppendToArray(widgetsArray, allyOutline) //2
+    widgetsArray = mod.AppendToArray(widgetsArray, allyInside) // 3
+    widgetsArray = mod.AppendToArray(widgetsArray, letterAlly) // 4
+    widgetsArray = mod.AppendToArray(widgetsArray, neutralUiLayer) // 5
+    widgetsArray = mod.AppendToArray(widgetsArray, neutralOutline) // 6
+    widgetsArray = mod.AppendToArray(widgetsArray, neutralInside)// 7
+    widgetsArray = mod.AppendToArray(widgetsArray, letterNeutral) // 8
+    widgetsArray = mod.AppendToArray(widgetsArray, enemyUiLayer) // 9
+    widgetsArray = mod.AppendToArray(widgetsArray, enemyOutline) // 10
+    widgetsArray = mod.AppendToArray(widgetsArray, enemyInside) //11
+    widgetsArray = mod.AppendToArray(widgetsArray, letterEnemy) // 12
+    widgetsArray = mod.AppendToArray(widgetsArray, contestLine) // 13
+    widgetsArray = mod.AppendToArray(widgetsArray, contestLineAlly) // 14
+    widgetsArray = mod.AppendToArray(widgetsArray, contestLineEnemy) // 15
+    widgetsArray = mod.AppendToArray(widgetsArray, contestNumAlly) // 16
+    widgetsArray = mod.AppendToArray(widgetsArray, contestNumEnemy) // 17
+    widgetsArray = mod.AppendToArray(widgetsArray, capturePointMsg) // 18
+
+    mod.SetVariable(onFlagPlayerWidgets(player), widgetsArray);
+}
 
