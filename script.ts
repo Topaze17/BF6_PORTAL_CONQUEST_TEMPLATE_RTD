@@ -2,6 +2,9 @@
 import * as modlib from "./modlib"
 //comment out when charging to serv
 import * as mod from "./types/mod/index";
+//usefull const for flag ui widget
+const colorAlpha = 0.8
+const insideAlpha = 0.9
 //Color Vector
 const blueColor = mod.CreateVector(0.439, 0.922, 1)
 const darkBlueColor = mod.CreateVector(0.075, 0.184, 0.247)
@@ -14,10 +17,10 @@ const whiteToBlue16Step = mod.Divide(mod.Subtract(blueColor, whiteColor), 16)
 const whiteToRed16Step = mod.Divide(mod.Subtract(redColor, whiteColor), 16)
 //Global Variable
 const isGameModeReady = mod.GlobalVariable(1)
-const flagBlinking = mod.GlobalVariable(2)
 const newFlagBlinking = mod.GlobalVariable(9)
 const isFlagBlinking = mod.GlobalVariable(8)
 const isBlinkRunning = mod.GlobalVariable(3)
+const timer = mod.GlobalVariable(2)
 const natoFlagsUi = mod.GlobalVariable(4)
 const paxFlagsUi = mod.GlobalVariable(5)
 const flagsOwner = mod.GlobalVariable(6)
@@ -53,13 +56,12 @@ export function OnGameModeStarted(): void {
         flagsOwnerArray = mod.AppendToArray(flagsOwnerArray, Team.Neutral)
     }
     for(let x = 0; x < numberOfFlag; x += 1) {
-        isFlagBlinkingArray = mod.AppendToArray(isFlagBlinkingArray, false)
+            isFlagBlinkingArray = mod.AppendToArray(isFlagBlinkingArray, false) 
     }
+    mod.SetVariable(timer, 0)
     mod.SetVariable(isFlagBlinking, isFlagBlinkingArray)
     mod.SetVariable(flagsOwner, flagsOwnerArray)
-    mod.SetVariable(flagBlinking, mod.EmptyArray())
     mod.SetVariable(newFlagBlinking, mod.EmptyArray())
-    mod.SetVariable(isBlinkRunning, false)
     makeUiTeamAnchor()
     makeScoreUi()
     makeFlagUiLayer(numberOfFlag)
@@ -78,6 +80,7 @@ export function OnGameModeStarted(): void {
         mod.SetVariable(teamCapturingCapturePoint(capturePoint), teamFlagOwner)
         setFlagOwner(x, teamFlagOwner)
     }
+    mod.SetVariable(isBlinkRunning, false)
     mod.SetVariable(isGameModeReady, 1)
 
 }
@@ -169,9 +172,10 @@ export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePo
 export async function OngoingGlobal(): Promise<void> {
     
     await mod.Wait(0.05)
+    await mod.SetVariable(timer, mod.GetVariable(timer) + 0.05)
     if(mod.GetVariable(isGameModeReady) == 1) {
-        if(mod.Not(mod.GetVariable(isBlinkRunning))) {
-            blink()
+       if(mod.Not(mod.GetVariable(isBlinkRunning))) {
+           blink()
         }
     }
 
@@ -313,152 +317,110 @@ function setFlagOwner(flag: number, team : number) {
     }
 }
 function setFlagBlink(flag : number, bool: boolean) {
-    const allKeys = Object.keys(mod.stringkeys)
     if(bool) {
-        const flagOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
-        const flagOffset = flag * 3
-        const numberOfFlag = mod.GetVariable(nb_flag)
-        const neutralSection = 0
-        const allySection = numberOfFlag * 3
-        const enemySection = (numberOfFlag * 3) * 2
-        let natoFlagStateOffest = neutralSection
-        let paxFlagStateOffest = neutralSection
-        if(flagOwner == Team.Nato) {
-            natoFlagStateOffest = allySection
-            paxFlagStateOffest = enemySection
-        }
-        else if(flagOwner == Team.Pax) {
-            natoFlagStateOffest = enemySection
-            paxFlagStateOffest = allySection
-        }
-        const paxFlagsWidgets = mod.GetVariable(paxFlagsUi)
-        const natoFlagsWidgets = mod.GetVariable(natoFlagsUi)
-        let uiWidgetBlinking = mod.EmptyArray()
-        const pax_outline = mod.ValueInArray(paxFlagsWidgets, paxFlagStateOffest + flagOffset)
-        const pax_pt = mod.ValueInArray(paxFlagsWidgets, paxFlagStateOffest + flagOffset + 1)
-        const pax_letter = mod.ValueInArray(paxFlagsWidgets, paxFlagStateOffest + flagOffset + 2)
-
-        const nato_outline = mod.ValueInArray(natoFlagsWidgets, natoFlagStateOffest + flagOffset)
-        const nato_pt = mod.ValueInArray(natoFlagsWidgets, natoFlagStateOffest + flagOffset + 1)
-        const nato_letter = mod.ValueInArray(natoFlagsWidgets, natoFlagStateOffest + flagOffset + 2)
-
-
-        uiWidgetBlinking = mod.AppendToArray(uiWidgetBlinking, nato_outline)
-        uiWidgetBlinking = mod.AppendToArray(uiWidgetBlinking, nato_pt)
-        uiWidgetBlinking = mod.AppendToArray(uiWidgetBlinking, nato_letter)
-        uiWidgetBlinking = mod.AppendToArray(uiWidgetBlinking, pax_outline)
-        uiWidgetBlinking = mod.AppendToArray(uiWidgetBlinking, pax_pt)
-        uiWidgetBlinking = mod.AppendToArray(uiWidgetBlinking, pax_letter)
-        mod.SetVariable(newFlagBlinking, mod.AppendToArray(mod.GetVariable(newFlagBlinking), uiWidgetBlinking))
         mod.SetVariableAtIndex(isFlagBlinking, flag, true)
     }
     else {
-        let flagBlinkingArray = mod.GetVariable(flagBlinking)
-       flagBlinkingArray = modlib.FilteredArray(flagBlinkingArray, (currentElement) => {
-            const parent = mod.GetUIWidgetParent(currentElement);
-            const isNotChildOfTarget = mod.Not(mod.Equals(mod.GetUIWidgetName(parent), allKeys[flag]));
-            return isNotChildOfTarget;
-        });
-        mod.SetVariable(flagBlinking, flagBlinkingArray)
-        mod.SetVariableAtIndex(isFlagBlinking, flag, false)
+            const ownerArray = mod.GetVariable(flagsOwner)
+            const natoFlagsWidgets = mod.GetVariable(natoFlagsUi)
+            const paxFlagsWidgets = mod.GetVariable(paxFlagsUi)
+            const owner = mod.ValueInArray(ownerArray, flag)
+            const nbFlags = mod.GetVariable(nb_flag)
+            const neutralSection = 0
+            const allySection = nbFlags * 3
+            const enemySection = (nbFlags * 3) * 2
+            const flagOffset = flag * 3
+            let paxLayerUpdate = neutralSection
+            let natoLayerUpdate = neutralSection
+            if(owner == Team.Pax) {
+                paxLayerUpdate = allySection
+                natoLayerUpdate = enemySection
+                mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset), colorAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 1), insideAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 2), colorAlpha)
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset), colorAlpha)
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 1), insideAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 2), colorAlpha)
+            }
+            else if(owner == Team.Nato) {
+                paxLayerUpdate = enemySection
+                natoLayerUpdate = allySection
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset), colorAlpha)
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 1), insideAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 2), colorAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset), colorAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 1), insideAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 2), colorAlpha)
+            }
+            else {
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset), colorAlpha)
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 1), insideAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 2), colorAlpha)
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset), colorAlpha)
+                mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 1), insideAlpha)
+                mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 2), colorAlpha)
+            }
+            mod.SetVariableAtIndex(isFlagBlinking, flag, false)
+        }
     }
-}
+
 //HARD LIMIT 9 FLAG BLINKING AT THE SAME TIME START LAG (Only on the UI)
 async function blink() {
     mod.SetVariable(isBlinkRunning, true)
-    const flagBlinkingArray = mod.GetVariable(flagBlinking)
-    const sizeFlagBlinkingArray = mod.CountOf(flagBlinkingArray)
-    const newFlagBlinkingArray = mod.GetVariable(newFlagBlinking)
-    const sizeNewFlagBlinkingArray = mod.CountOf(newFlagBlinkingArray)
-    if(sizeFlagBlinkingArray != 0 || sizeNewFlagBlinkingArray != 0) {
-        let finalArray = mod.AppendToArray(flagBlinkingArray, newFlagBlinkingArray)
-        if(sizeNewFlagBlinkingArray != 0) {
-            mod.SetVariable(flagBlinking, finalArray)
-            mod.SetVariable(newFlagBlinking, mod.EmptyArray())
-        }
-        let finalSize = sizeFlagBlinkingArray + sizeNewFlagBlinkingArray
-        let uiWidgetIsContainerArray = mod.EmptyArray()
-        let uiWidgetBlinkingAlpha = mod.EmptyArray()
-        for(let x = 0; x < finalSize; x +=1) {
-            const currentWidget =  mod.ValueInArray(finalArray, x)
-            const widgetName = mod.GetUIWidgetName(currentWidget)
-            if(mod.Or(mod.Equals(widgetName, mod.stringkeys.rectangle_outline), mod.Equals(widgetName, mod.stringkeys.rectangle_inside))) {
-                uiWidgetBlinkingAlpha = mod.AppendToArray(uiWidgetBlinkingAlpha , mod.GetUIWidgetBgAlpha(currentWidget))
-                uiWidgetIsContainerArray = mod.AppendToArray(uiWidgetIsContainerArray, true)
-            }
-            else {
-                uiWidgetBlinkingAlpha = mod.AppendToArray(uiWidgetBlinkingAlpha , mod.GetUITextAlpha(currentWidget))
-                uiWidgetIsContainerArray = mod.AppendToArray(uiWidgetIsContainerArray, false)
-            }
-             
-        }
-        // Fade Out
-        if(mod.CountOf(finalArray) != 0) {
-            for(let x = 1; x >= 0.3; x -= 0.1) {
-                const tuplesArray = updateArraysForBlink(finalArray, uiWidgetBlinkingAlpha, uiWidgetIsContainerArray)
-                finalArray = tuplesArray[0]
-                uiWidgetBlinkingAlpha = tuplesArray[1]
-                uiWidgetIsContainerArray = tuplesArray[2]
-                for(let y = 0; y < finalSize; y += 1) {
-                    if(mod.ValueInArray(uiWidgetIsContainerArray, y)) {
-                        mod.SetUIWidgetBgAlpha(mod.ValueInArray(finalArray, y), x * mod.ValueInArray(uiWidgetBlinkingAlpha, y))
-                    }
-                    else {
-                        mod.SetUITextAlpha(mod.ValueInArray(finalArray, y), x * mod.ValueInArray(uiWidgetBlinkingAlpha, y))
-                    }
+    const natoFlagsWidgets = mod.GetVariable(natoFlagsUi)
+    const paxFlagsWidgets = mod.GetVariable(paxFlagsUi)
+    const nbFlags = mod.GetVariable(nb_flag)
+    const neutralSection = 0
+    const allySection = nbFlags * 3
+    const enemySection = (nbFlags * 3) * 2
+    while(true) {
+        const ownerArray = mod.GetVariable(flagsOwner)
+        const blinkArray = mod.GetVariable(isFlagBlinking)
+        const sin = mod.SineFromRadians(mod.Multiply(mod.GetVariable(timer) , 2))
+        const outlineAlpha = mod.Add(0.55, mod.Multiply(sin, 0.25));
+        const insideCalcAlpha = mod.Add(0.6, mod.Multiply(sin, 0.3));
+        for(let x = 0 ; x < nbFlags; x += 1) {
+            if(mod.ValueInArray(blinkArray, x)) {
+                const owner = mod.ValueInArray(ownerArray, x)
+                const flagOffset = x * 3
+                let paxLayerUpdate = neutralSection
+                let natoLayerUpdate = neutralSection
+                if(owner == Team.Pax) {
+                    paxLayerUpdate = allySection
+                    natoLayerUpdate = enemySection
+                    mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset), outlineAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 1), insideCalcAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 2), outlineAlpha)
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset), outlineAlpha)
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 1), insideCalcAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 2), outlineAlpha)
                 }
-                await mod.Wait(0.05);
-            }
-            // Fade In
-            for(let x = 0.3; x <= 1; x += 0.1) {
-                const tuplesArray = updateArraysForBlink(finalArray, uiWidgetBlinkingAlpha, uiWidgetIsContainerArray)
-                finalArray = tuplesArray[0]
-                uiWidgetBlinkingAlpha = tuplesArray[1]
-                uiWidgetIsContainerArray = tuplesArray[2]
-                for(let y = 0; y < finalSize; y += 1) {
-                    if(mod.ValueInArray(uiWidgetIsContainerArray, y)) {
-                        mod.SetUIWidgetBgAlpha(mod.ValueInArray(finalArray, y), x * mod.ValueInArray(uiWidgetBlinkingAlpha, y))
-                    }
-                    else {
-                        mod.SetUITextAlpha(mod.ValueInArray(finalArray, y), x * mod.ValueInArray(uiWidgetBlinkingAlpha, y))
-                    }
+                else if(owner == Team.Nato) {
+                    paxLayerUpdate = enemySection
+                    natoLayerUpdate = allySection
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset), outlineAlpha)
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 1), insideCalcAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 2), outlineAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset), outlineAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 1), insideCalcAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 2), outlineAlpha)
                 }
-                await mod.Wait(0.05);
+                else {
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset), outlineAlpha)
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 1), insideCalcAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(paxFlagsWidgets, paxLayerUpdate + flagOffset + 2), outlineAlpha)
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset), outlineAlpha)
+                    mod.SetUIWidgetBgAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 1), insideCalcAlpha)
+                    mod.SetUITextAlpha(mod.ValueInArray(natoFlagsWidgets, natoLayerUpdate + flagOffset + 2), outlineAlpha)
+                }
             }
+        }
+        await mod.Wait(0.05)
+    }  
+}
             
-        }
-    }
-    
-    mod.SetVariable(isBlinkRunning, false)
-    }
-    function updateArraysForBlink(widgets : mod.Array, aplhas : mod.Array, isContainers : mod.Array) : [mod.Array, mod.Array, mod.Array]{
-        const newFlagBlinkingArray = mod.GetVariable(newFlagBlinking)
-        const sizeNewFlagBlinkingArray = mod.CountOf(newFlagBlinkingArray)
-        if(sizeNewFlagBlinkingArray != 0) {
-            let uiWidgetArray = widgets
-            let uiWidgetBlinkingAlpha = aplhas
-            let uiWidgetIsContainerArray = isContainers
-            for(let x = 0; x < sizeNewFlagBlinkingArray; x +=1) {
-            const currentWidget =  mod.ValueInArray(newFlagBlinkingArray, x)
-            const widgetName = mod.GetUIWidgetName(currentWidget)
-            uiWidgetArray = mod.AppendToArray(uiWidgetArray, currentWidget)
-            if(mod.Or(mod.Equals(widgetName, mod.stringkeys.rectangle_outline), mod.Equals(widgetName, mod.stringkeys.rectangle_inside))) {
-                uiWidgetBlinkingAlpha = mod.AppendToArray(uiWidgetBlinkingAlpha , mod.GetUIWidgetBgAlpha(currentWidget))
-                uiWidgetIsContainerArray = mod.AppendToArray(uiWidgetIsContainerArray, true)
-            }
-            else {
-                uiWidgetBlinkingAlpha = mod.AppendToArray(uiWidgetBlinkingAlpha , mod.GetUITextAlpha(currentWidget))
-                uiWidgetIsContainerArray = mod.AppendToArray(uiWidgetIsContainerArray, false)
-            }
-             
-            }
-            mod.SetVariable(flagBlinking, uiWidgetArray)
-            mod.SetVariable(newFlagBlinking, mod.EmptyArray())
-            return [uiWidgetArray, uiWidgetBlinkingAlpha, uiWidgetIsContainerArray]
-        }
-        return [widgets, aplhas, isContainers]
+ 
 
-    }
     function updatePlayerOnFlagLayer(player : mod.Player, nbPaxPlayers: number, nbNatoPlayer: number, flag: number) {
         const allKeys = Object.keys(mod.stringkeys)
         const flagOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
@@ -568,11 +530,11 @@ async function blink() {
                 const baseUIName = allKeys[l]
                 mod.AddUIContainer(baseUIName, mod.CreateVector(l * 42 - ((nb_flag - 1) * 21) ,0,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, allyUiLayer, true, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, teamOwner)
                 const baseIU = mod.FindUIWidgetWithName(baseUIName, allyUiLayer)
-                mod.AddUIText(mod.stringkeys.circle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 40, blueColor, 0.8, mod.UIAnchor.Center, teamOwner)
+                mod.AddUIText(mod.stringkeys.circle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 40, blueColor, colorAlpha, mod.UIAnchor.Center, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.circle_outline, baseIU))
-                mod.AddUIText(mod.stringkeys.circle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 36, blackColor, 0.9, mod.UIAnchor.Center,teamOwner)
+                mod.AddUIText(mod.stringkeys.circle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 36, blackColor, insideAlpha, mod.UIAnchor.Center,teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.circle_inside, baseIU))
-                mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(allKeys[l]), 17, blueColor, 0.8, mod.UIAnchor.Center, teamOwner)
+                mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(allKeys[l]), 17, blueColor, colorAlpha, mod.UIAnchor.Center, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.letter, baseIU))
             }
             if(x == 0) {
@@ -604,11 +566,11 @@ async function blink() {
                 const baseUIName = allKeys[l]
                 mod.AddUIContainer(baseUIName, mod.CreateVector(l * 42 - ((nb_flag - 1) * 21) ,0,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, neutralUiLayer, true, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, teamOwner)
                 const baseIU = mod.FindUIWidgetWithName(baseUIName, neutralUiLayer)
-                mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(33,33,0), mod.UIAnchor.Center, baseIU, true, 0, whiteColor, 0.8, mod.UIBgFill.Solid, teamOwner)
+                mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(33,33,0), mod.UIAnchor.Center, baseIU, true, 0, whiteColor, colorAlpha, mod.UIBgFill.Solid, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.rectangle_outline, baseIU))
-                mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(30,30,0), mod.UIAnchor.Center, baseIU, true, 0, blackColor, 0.8, mod.UIBgFill.Solid, teamOwner)
+                mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(30,30,0), mod.UIAnchor.Center, baseIU, true, 0, blackColor, insideAlpha, mod.UIBgFill.Solid, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.rectangle_inside, baseIU))
-                mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(allKeys[l]), 17, whiteColor, 0.8, mod.UIAnchor.Center, teamOwner)
+                mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(allKeys[l]), 17, whiteColor, colorAlpha, mod.UIAnchor.Center, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.letter, baseIU))
             }
             if(x == 0) {
@@ -640,11 +602,11 @@ async function blink() {
                 const baseUIName = allKeys[l]
                 mod.AddUIContainer(baseUIName, mod.CreateVector(l * 42 - ((nb_flag - 1) * 21) ,0,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, enemyUiLayer, true, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, teamOwner)
                 const baseIU = mod.FindUIWidgetWithName(baseUIName, enemyUiLayer)
-                mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(33,33,0), mod.UIAnchor.Center, baseIU, false, 0, redColor, 0.8, mod.UIBgFill.Solid, teamOwner)
+                mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(33,33,0), mod.UIAnchor.Center, baseIU, false, 0, redColor, colorAlpha, mod.UIBgFill.Solid, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.rectangle_outline, baseIU))
-                mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(30,30,0), mod.UIAnchor.Center, baseIU, false, 0, blackColor, 0.8, mod.UIBgFill.Solid, teamOwner)
+                mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(30,30,0), mod.UIAnchor.Center, baseIU, false, 0, blackColor, insideAlpha, mod.UIBgFill.Solid, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.rectangle_inside, baseIU))
-                mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(allKeys[l]), 17, redColor, 0.8, mod.UIAnchor.Center, teamOwner)
+                mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, baseIU, false, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(allKeys[l]), 17, redColor, colorAlpha, mod.UIAnchor.Center, teamOwner)
                 flagsArray = mod.AppendToArray(flagsArray, mod.FindUIWidgetWithName(mod.stringkeys.letter, baseIU))
             }
             if(x == 0) {
@@ -737,13 +699,13 @@ function makeOnFlagUiLayer(player : mod.Player) {
     mod.AddUIContainer(allyUiLayerName, mod.CreateVector(0,200,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, highestUiLayer, false, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, player)
     const allyUiLayer = mod.FindUIWidgetWithName(allyUiLayerName, highestUiLayer)
     
-    mod.AddUIText(mod.stringkeys.circle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 67, blueColor, 0.8, mod.UIAnchor.Center, player)
+    mod.AddUIText(mod.stringkeys.circle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 67, blueColor, colorAlpha, mod.UIAnchor.Center, player)
     const allyOutline = mod.FindUIWidgetWithName(mod.stringkeys.circle_outline, allyUiLayer)
     
-    mod.AddUIText(mod.stringkeys.circle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 60, blackColor, 0.9, mod.UIAnchor.Center,player)
+    mod.AddUIText(mod.stringkeys.circle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.pt), 60, blackColor, insideAlpha, mod.UIAnchor.Center,player)
     const allyInside = mod.FindUIWidgetWithName(mod.stringkeys.circle_inside, allyUiLayer)
     
-    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, blueColor, 0.8, mod.UIAnchor.Center, player)
+    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, allyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, blueColor, colorAlpha, mod.UIAnchor.Center, player)
     const letterAlly = mod.FindUIWidgetWithName(mod.stringkeys.letter, allyUiLayer)
 
     // --- Neutral Flag ---
@@ -751,13 +713,13 @@ function makeOnFlagUiLayer(player : mod.Player) {
     mod.AddUIContainer(neutralUiLayerName, mod.CreateVector(0,200,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, highestUiLayer, true, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, player)
     const neutralUiLayer = mod.FindUIWidgetWithName(neutralUiLayerName, highestUiLayer)
     
-    mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(54,54,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, whiteColor, 0.8, mod.UIBgFill.Solid, player)
+    mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(54,54,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, whiteColor, colorAlpha, mod.UIBgFill.Solid, player)
     const neutralOutline = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_outline, neutralUiLayer)
     
-    mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(49,49,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, blackColor, 0.8, mod.UIBgFill.Solid, player)
+    mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(49,49,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, blackColor, insideAlpha, mod.UIBgFill.Solid, player)
     const neutralInside = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_inside, neutralUiLayer)
     
-    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, whiteColor, 0.8, mod.UIAnchor.Center, player)
+    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, neutralUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, whiteColor, colorAlpha, mod.UIAnchor.Center, player)
     const letterNeutral = mod.FindUIWidgetWithName(mod.stringkeys.letter, neutralUiLayer)
 
     // --- Enemy Flag ---
@@ -765,13 +727,13 @@ function makeOnFlagUiLayer(player : mod.Player) {
     mod.AddUIContainer(enemyUiLayerName, mod.CreateVector(0,200,0), mod.CreateVector(0,0,0), mod.UIAnchor.TopCenter, highestUiLayer, false, 0 , mod.CreateVector(0,0,0), 1, mod.UIBgFill.Blur, player)
     const enemyUiLayer = mod.FindUIWidgetWithName(enemyUiLayerName, highestUiLayer)
     
-    mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(54,54,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, redColor, 0.8, mod.UIBgFill.Solid, player)
+    mod.AddUIContainer(mod.stringkeys.rectangle_outline, mod.CreateVector(0,0, 0), mod.CreateVector(54,54,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, redColor, colorAlpha, mod.UIBgFill.Solid, player)
     const enemyOutline = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_outline, enemyUiLayer)
     
-    mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(49,49,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, blackColor, 0.8, mod.UIBgFill.Solid, player)
+    mod.AddUIContainer(mod.stringkeys.rectangle_inside, mod.CreateVector(0,0, 0), mod.CreateVector(49,49,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, blackColor, insideAlpha, mod.UIBgFill.Solid, player)
     const enemyInside = mod.FindUIWidgetWithName(mod.stringkeys.rectangle_inside, enemyUiLayer)
     
-    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, redColor, 0.8, mod.UIAnchor.Center, player)
+    mod.AddUIText(mod.stringkeys.letter, mod.CreateVector(0,0, 0), mod.CreateVector(0,0,0), mod.UIAnchor.Center, enemyUiLayer, true, 0, mod.CreateVector(0,0,0), 0, mod.UIBgFill.None, mod.Message(mod.stringkeys.A), 28, redColor, colorAlpha, mod.UIAnchor.Center, player)
     const letterEnemy = mod.FindUIWidgetWithName(mod.stringkeys.letter, enemyUiLayer)
 
     // --- Contestation Logic ---
