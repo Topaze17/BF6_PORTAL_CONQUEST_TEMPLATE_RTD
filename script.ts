@@ -206,9 +206,13 @@ export function OnPlayerDeployed(eventPlayer: mod.Player): void {
         mod.SetTeam(eventPlayer, mod.GetTeam(Team.Pax))
     }
 }
+export function OnPlayerLeaveGame(eventNumber: number): void {
+    if(mod.GetVariable(isGameModeReady) != 1) return
+    RemoveInvalidPlayerFromFlag()
+}
 export function OnPlayerDied(eventPlayer: mod.Player,eventOtherPlayer: mod.Player,eventDeathType: mod.DeathType,eventWeaponUnlock: mod.WeaponUnlock): void {
     mod.SetVariable(playerPlayTickSound(eventPlayer), false)
-    removePlayerFromCapturePointIfNecessary(eventPlayer)
+    RemovePlayerFromCapturePointIfNecessary(eventPlayer)
 }
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
     const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer)) 
@@ -705,7 +709,7 @@ function AddToScore(number : number, team : number) {
         const widget3 = mod.ValueInArray(widgetsArrayPax, 1)
         const newScore = mod.GetVariable(teamScore(Team.Nato)) + number
         if(newScore <= 0) {
-            gameWin(Team.Pax)
+            GameWin(Team.Pax)
         }
         else if(newScore <= (startScoreNato / 20)) {
             mod.PlayMusic(mod.MusicEvents.Core_Overtime_Loop)
@@ -724,7 +728,7 @@ function AddToScore(number : number, team : number) {
         const widget3 = mod.ValueInArray(widgetsArrayPax, 0)
         const newScore = mod.GetVariable(teamScore(Team.Pax)) + number
         if(newScore <= 0) {
-           gameWin(Team.Nato)
+           GameWin(Team.Nato)
         }
         else if(newScore <= (startScorePax / 20)) {
             mod.PlayMusic(mod.MusicEvents.Core_Overtime_Loop)
@@ -1082,7 +1086,24 @@ function MakeOnFlagUiLayer(player : mod.Player) {
     mod.SetVariable(onFlagPlayerWidgets(player), widgetsArray);
 }
 //-------OTHER FUNCTION------//
-function removePlayerFromCapturePointIfNecessary(player : mod.Player) : number{
+function RemoveInvalidPlayerFromFlag() {
+    for(let x = 0; x < mod.GetVariable(nb_flag); x += 1) {
+        const currCapturePoint = mod.ValueInArray(mod.AllCapturePoints(), x)
+        let paxPlayers = mod.GetVariable(paxPlayersOnCapturePoint(currCapturePoint))
+        let natoPlayers = mod.GetVariable(natoPlayersOnCapturePoint(currCapturePoint))
+        if(modlib.IsTrueForAny(paxPlayers, (player) => mod.Not(mod.IsPlayerValid(player)))) {
+            paxPlayers = modlib.FilteredArray(paxPlayers, (player) => mod.IsPlayerValid(player))
+            mod.SetVariable(paxPlayersOnCapturePoint(currCapturePoint), paxPlayers)
+            NotifyPlayersOfPopulationChangeOnFlag(currCapturePoint)
+        }
+        else if(modlib.IsTrueForAny(natoPlayers, (player) => mod.Not(mod.IsPlayerValid(player)))) {
+            natoPlayers = modlib.FilteredArray(natoPlayers, (player) => mod.IsPlayerValid(player))
+            mod.SetVariable(natoPlayersOnCapturePoint(currCapturePoint), natoPlayers)
+            NotifyPlayersOfPopulationChangeOnFlag(currCapturePoint)
+        }
+    }
+}
+function RemovePlayerFromCapturePointIfNecessary(player : mod.Player) : number{
     const playerFlag = mod.GetVariable(playerIsOnFlag(player))
     if(playerFlag != -1) {
         const playerId = mod.GetObjId(player)
@@ -1113,7 +1134,7 @@ function removePlayerFromCapturePointIfNecessary(player : mod.Player) : number{
 }
 
 
-function gameWin(team : Team) {
+function GameWin(team : Team) {
     mod.EndGameMode(mod.GetTeam(team))
     mod.PlayMusic(mod.MusicEvents.Core_Stop)
     mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
