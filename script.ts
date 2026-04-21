@@ -27,7 +27,10 @@ const maxMultiplier = 2
 
 
 
-
+//enum as array
+const voiceOverFlags = Object.values(mod.VoiceOverFlags).filter(
+  (value) => typeof value === 'number'
+) as mod.VoiceOverFlags[]
 
 
 
@@ -76,6 +79,7 @@ function teamFlags(team : Team) : mod.Variable { return mod.ObjectVariable(mod.G
 function teamFlagsUi(team : Team) : mod.Variable { return mod.ObjectVariable(mod.GetTeam(team), 2)}
 function teamScore(team : Team) : mod.Variable { return mod.ObjectVariable(mod.GetTeam(team), 3)}
 function teamScoreUi(team : Team) : mod.Variable { return mod.ObjectVariable(mod.GetTeam(team), 4)}
+function teamVo(team : Team) : mod.Variable { return mod.ObjectVariable(mod.GetTeam(team), 5)}
 
 //Enum
 enum Team {
@@ -623,6 +627,7 @@ function SetFlagBlink(flag : number, bool: boolean) {
             mod.SetVariableAtIndex(isFlagBlinking, flag, false)
         }
 }
+//-------Setup Function-----//
 function SetupFlagAudio() {
     //6 second sound
     // SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnExit_OneShot2D
@@ -643,6 +648,10 @@ function SetupFlagAudio() {
     soundArray = mod.AppendToArray(soundArray, onCaptureByAlly)
     soundArray = mod.AppendToArray(soundArray, onNeutralize)
     mod.SetVariable(capturePointSound, soundArray)
+}
+function SetupVoAudio() {
+    mod.SetVariable(teamVo(Team.Nato), mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0),mod.CreateVector(1,1,1)))
+    mod.SetVariable(teamVo(Team.Pax), mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_VOModule_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0),mod.CreateVector(1,1,1)))
 }
 //------UPDATE FUNCTION------//   
 function updateOnFlagLayerCaptureProgress(player : mod.Player, captureProgress : number, layer : number) {
@@ -1111,7 +1120,9 @@ function removePlayerFromCapturePointIfNecessary(player : mod.Player) : number{
         }
     return -1
 }
-
+function playVo(team : Team, vo : mod.VoiceOverEvents2D, flag : number = 0) {
+    mod.PlayVO(mod.GetVariable(teamVo(team)), vo, voiceOverFlags[flag], mod.GetTeam(team))
+}
 
 function gameWin(team : Team) {
     mod.EndGameMode(mod.GetTeam(team))
