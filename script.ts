@@ -350,7 +350,7 @@ async function SoundOnFlag(capturePoint: mod.CapturePoint) {
                     ForEach(paxPlayers, (player) => mod.StopSound(contestSfx, player))
                 }
             
-                ForEach(natoPlayers, (player) => mod.PlaySound(tickAllySfx, capturePointProgress, player))
+                ForEach(natoPlayers, (player) => mod.PlaySound(tickAllySfx,  x % 2 == 0 ? capturePointProgress : (capturePointProgress  / 2), player))
                 
                 if(!natoTeamWasCapturing) {
                     ForEach(paxPlayers, (player) => mod.PlaySound(tickEnemySfx, 1, player))
@@ -368,7 +368,7 @@ async function SoundOnFlag(capturePoint: mod.CapturePoint) {
                     ForEach(paxPlayers, (player) => mod.StopSound(contestSfx, player))
                 }
                 
-                ForEach(paxPlayers, (player) => mod.PlaySound(tickAllySfx, capturePointProgress, player))
+                ForEach(paxPlayers, (player) => mod.PlaySound(tickAllySfx, x % 2 == 0 ? capturePointProgress : (capturePointProgress  / 2), player))
                 if(!paxTeamWasCapturing) {
                     ForEach(natoPlayers, (player) => mod.PlaySound(tickEnemySfx, 1, player))
                     paxTeamWasCapturing = true
@@ -394,6 +394,7 @@ async function SoundOnFlag(capturePoint: mod.CapturePoint) {
                 }
             }
         }
+        x += 1
         await mod.Wait(0.4)
     } 
 }
