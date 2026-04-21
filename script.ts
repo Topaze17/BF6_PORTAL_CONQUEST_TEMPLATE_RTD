@@ -126,6 +126,7 @@ export function OnGameModeStarted(): void {
         mod.SetVariable(capturePointProgressMovement(capturePoint), false)
         mod.SetVariable(capturePointProgressDirection(capturePoint), Team.Neutral)
         SetFlagOwner(x, teamFlagOwner)
+        SoundOnFlag(capturePoint)
     }
     mod.ForceVehicleSpawnerSpawn(mod.GetVehicleSpawner(400))
     mod.ForceVehicleSpawnerSpawn(mod.GetVehicleSpawner(401))
@@ -188,7 +189,6 @@ export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCaptureP
         mod.SetVariable(paxPlayersOnCapturePoint(eventCapturePoint), mod.AppendToArray(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)) , eventPlayer))
     }
     mod.SetVariable(playerPlayTickSound(eventPlayer), true)
-    TickSound(eventPlayer, eventCapturePoint)
     NotifyFlagOfPopulationChange(eventCapturePoint)
     NotifyPlayersOfPopulationChangeOnFlag(eventCapturePoint)
     DisplayOnFlagLayer(eventPlayer, flag)
@@ -218,7 +218,6 @@ export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player)
     const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer)) 
     if(playerFlag != -1) {
         DisplayOnFlagLayer(eventPlayer, playerFlag)
-        TickSound(eventPlayer, mod.ValueInArray(mod.AllCapturePoints(), playerFlag))
         NotifyFlagOfPopulationChange(mod.ValueInArray(mod.AllCapturePoints(), playerFlag))
     }
 }
@@ -325,63 +324,78 @@ async function Blink() {
         await mod.Wait(0.05)
     }  
 }
-async function TickSound(player : mod.Player, capturePoint: mod.CapturePoint) {
+async function SoundOnFlag(capturePoint: mod.CapturePoint) {
     const soundArray = mod.GetVariable(capturePointSound);
     const tickAllySfx = mod.ValueInArray(soundArray, 0)
     const tickEnemySfx = mod.ValueInArray(soundArray, 1)
     const contestSfx = mod.ValueInArray(soundArray, 2)
-    const playerTeam = mod.GetObjId(mod.GetTeam(player))
     let wasContested = false
-    let enemyTeamWasCapturing = false
+    let paxTeamWasCapturing = false
+    let natoTeamWasCapturing = false
     let x = 0
-    while(mod.GetVariable(playerPlayTickSound(player))) {
+    while(true) {
         let capturePointProgress = mod.GetCaptureProgress(capturePoint)
         const currentDirection = mod.GetVariable(capturePointProgressDirection(capturePoint))
         const isMoving = mod.GetVariable(capturePointProgressMovement(capturePoint))
-        if (isMoving && (playerTeam == currentDirection)) {
-            if(x % 2 == 0) {
-                mod.PlaySound(tickAllySfx, capturePointProgress, player)
-            }
-            else {
-                mod.PlaySound(tickAllySfx, capturePointProgress / 2, player)
-            }
-            x += 1
-            if(enemyTeamWasCapturing) {
-                enemyTeamWasCapturing = false
-                mod.StopSound(tickEnemySfx, player)
-            }
-            else if(wasContested) {
-                wasContested = false
-                mod.StopSound(contestSfx, player)
-            }
-           
+        const paxPlayers = mod.GetVariable(paxPlayersOnCapturePoint(capturePoint))
+        const natoPlayers = mod.GetVariable(natoPlayersOnCapturePoint(capturePoint))
+        if(isMoving) {
+            if(currentDirection == Team.Nato) {
+                if(paxTeamWasCapturing) {
+                    ForEach(natoPlayers, (player) => mod.StopSound(tickEnemySfx, player))
+                }
+                else if(wasContested) {
+                    wasContested = false
+                    ForEach(natoPlayers, (player) => mod.StopSound(contestSfx, player))
+                    ForEach(paxPlayers, (player) => mod.StopSound(contestSfx, player))
+                }
             
-        }
-        else if(isMoving && (playerTeam != currentDirection) && !enemyTeamWasCapturing) {
-            mod.PlaySound(tickEnemySfx, 1, player);
-            enemyTeamWasCapturing = true
-            if(wasContested) {
-                wasContested = false
-                mod.StopSound(contestSfx, player)
+                ForEach(natoPlayers, (player) => mod.PlaySound(tickAllySfx, capturePointProgress, player))
+                
+                if(!natoTeamWasCapturing) {
+                    ForEach(paxPlayers, (player) => mod.PlaySound(tickEnemySfx, 1, player))
+                    natoTeamWasCapturing = true
+                }
+            }
+            else if(currentDirection == Team.Pax) {
+                if(natoTeamWasCapturing) {
+                    natoTeamWasCapturing = false
+                    ForEach(paxPlayers, (player) => mod.StopSound(tickEnemySfx, player))
+                }
+                else if(wasContested) {
+                    wasContested = false
+                    ForEach(natoPlayers, (player) => mod.StopSound(contestSfx, player))
+                    ForEach(paxPlayers, (player) => mod.StopSound(contestSfx, player))
+                }
+                
+                ForEach(paxPlayers, (player) => mod.PlaySound(tickAllySfx, capturePointProgress, player))
+                if(!paxTeamWasCapturing) {
+                    ForEach(natoPlayers, (player) => mod.PlaySound(tickEnemySfx, 1, player))
+                    paxTeamWasCapturing = true
+                }
             }
         }
-        else if(capturePointProgress != 1 && !wasContested){
-            mod.PlaySound(contestSfx, 1, player);
-            wasContested = true
-            if(enemyTeamWasCapturing) {
-                enemyTeamWasCapturing = false
-                mod.StopSound(tickEnemySfx, player)
+        else {
+            if(capturePointProgress != 0 && capturePointProgress != 1) {
+                if(natoTeamWasCapturing) {
+                    natoTeamWasCapturing = false
+                    ForEach(paxPlayers, (player) => mod.StopSound(tickEnemySfx, player))
+                }
+                else if(paxTeamWasCapturing) {
+                    paxTeamWasCapturing = false
+                    ForEach(natoPlayers, (player) => mod.StopSound(tickEnemySfx, player))
+                }
+                
+                paxTeamWasCapturing = false
+                if(!wasContested) {
+                    ForEach(natoPlayers, (player) => mod.PlaySound(contestSfx, 1, player))
+                    ForEach(paxPlayers, (player) => mod.PlaySound(contestSfx, 1, player))
+                    wasContested = true
+                }
             }
         }
         await mod.Wait(0.4)
-        
-
-        // Safety break if they leave the flag
-        if (mod.GetVariable(playerIsOnFlag(player)) == -1) { 
-            mod.SetVariable(playerPlayTickSound(player), false)
-            break; 
-        }
-    }
+    } 
 }
 // ----NOTIFY FUNCTION---//
 function NotifyOnFlagPlayersOfStateChange(capturePoint : mod.CapturePoint) {
@@ -442,14 +456,8 @@ function NotifyPlayerUiOfFlagCaptureState(capturePoint : mod.CapturePoint) {
         layerNato = 2
         layerPax = 0
     }
-    for(let x = 0; x < mod.CountOf(capturePointPlayersArrayNato); x += 1) {
-        const currPlayer = mod.ValueInArray(capturePointPlayersArrayNato, x)
-        updateOnFlagLayerCaptureProgress(currPlayer, captureProgress, layerNato)
-    }
-    for(let x = 0; x < mod.CountOf(capturePointPlayersArrayPax); x += 1) {
-        const currPlayer = mod.ValueInArray(capturePointPlayersArrayPax, x)
-        updateOnFlagLayerCaptureProgress(currPlayer, captureProgress, layerPax)
-    }
+    ForEach(capturePointPlayersArrayNato, (player) => updateOnFlagLayerCaptureProgress(player, captureProgress, layerNato))
+    ForEach(capturePointPlayersArrayPax, (player) => updateOnFlagLayerCaptureProgress(player, captureProgress, layerPax))
     
 
 }
@@ -499,14 +507,8 @@ function NotifyPlayersOfPopulationChangeOnFlag(capturePoint: mod.CapturePoint) {
     const nbPaxDownPlayers = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
     const nbNatoPlayers = mod.CountOf(natoPlayers)
     const nbPaxPlayers = mod.CountOf(paxPlayers)
-    for(let x = 0; x < nbNatoPlayers; x += 1) {
-        const currPlayer = mod.ValueInArray(natoPlayers, x)
-        UpdatePlayerOnFlagLayer(currPlayer, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag)
-    }
-    for(let x = 0; x < nbPaxPlayers; x += 1) {
-        const currPlayer = mod.ValueInArray(paxPlayers, x)
-        UpdatePlayerOnFlagLayer(currPlayer, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag)
-    }
+    ForEach(natoPlayers, (player) => UpdatePlayerOnFlagLayer(player, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag))
+    ForEach(paxPlayers, (player) => UpdatePlayerOnFlagLayer(player, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag))
 }
 
 //-----SET FUNCTION----//
@@ -1138,4 +1140,13 @@ function GameWin(team : Team) {
     mod.EndGameMode(mod.GetTeam(team))
     mod.PlayMusic(mod.MusicEvents.Core_Stop)
     mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
+}
+//------------Utility Function---------------//
+export function ForEach(array: mod.Array, fun: (currentElement: any) => any): void {
+    const arr = modlib.ConvertArray(array);
+    let n = arr.length;
+    for (let i = 0; i < n; i++) {
+        let currentElement = arr[i];
+        fun(currentElement)
+    }
 }
