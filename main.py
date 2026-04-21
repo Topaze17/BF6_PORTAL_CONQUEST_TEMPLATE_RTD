@@ -35,6 +35,7 @@ dictionaire["on_flag_layer"] = "on_flag_layer"
 dictionaire["capture_point_msg"] = "capture_point_msg"
 dictionaire["defending"] = "DEFENDING"
 dictionaire["capturing"] = "CAPTURING"
+dictionaire["neutralazing"] = "NEUTRALAZING"
 dictionaire["empty"] = "{}"
 file = open("Strings.json", "w")
 json.dump(dictionaire, file)

@@ -7171,9 +7171,9 @@ declare namespace mod {
         SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureLeadinFriendly_OneShot2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureLeadinNeutral_OneShot2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureLeadinThump_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureNeutralize_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureStartedByEnemy_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureStartedByFriendly_OneShot2D,
+        SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureNeutralize_OneShot2D, // candidate
+        SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureStartedByEnemy_OneShot2D, // candidate
+        SFX_UI_Gamemode_Shared_CaptureObjectives_CaptureStartedByFriendly_OneShot2D, // candidate
         SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingDroneEnemy_SimpleLoop2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingDroneFriendly_SimpleLoop2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingThumpEnemy_OneShot2D,
@@ -7185,14 +7185,14 @@ declare namespace mod {
         SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickInBetweenEnemy_OneShot2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickInBetweenFriendly_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnEnter_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnExit_OneShot2D,
+        SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnEnter_OneShot2D, // candidate
+        SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnExit_OneShot2D, // candidate
         SFX_UI_Gamemode_Shared_CaptureObjectives_ObjetiveUnlockCountdownRiser_OneShot2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_ObjetiveUnlockCountdownTick_OneShot2D,
         SFX_UI_Gamemode_Shared_CaptureObjectives_ObjetiveUnlockReveal_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_OnContested_OneShot2D,
-        SFX_UI_Gamemode_Shared_CaptureObjectives_OnContested_SimpleLoop2D,
+        SFX_UI_Gamemode_Shared_CaptureObjectives_OnCapturedByFriendly_OneShot2D, // candidate
+        SFX_UI_Gamemode_Shared_CaptureObjectives_OnContested_OneShot2D, // candidate
+        SFX_UI_Gamemode_Shared_CaptureObjectives_OnContested_SimpleLoop2D, // candidate
         SFX_UI_Gamemode_Shared_Intro_Countdown_Final_OneShot2D,
         SFX_UI_Gamemode_Shared_Intro_Countdown_OneShot2D,
         SFX_UI_Gamemode_Shared_Intro_FinalImpact_OneShot2D,
