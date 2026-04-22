@@ -186,10 +186,10 @@ export async function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint): 
     }
     await mod.Wait(0.1)
 }
-export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint): void {
+export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint, byPassDownCheck: boolean = false): void {
     const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
     mod.SetVariable(playerIsOnFlag(eventPlayer), flag)
-    if (mod.GetSoldierState(eventPlayer, mod.SoldierStateBool.IsManDown)) return
+    if (!mod.GetSoldierState(eventPlayer, mod.SoldierStateBool.IsAlive) && !byPassDownCheck) return 
     if(mod.GetObjId(mod.GetTeam(eventPlayer)) == Team.Nato) {
         mod.SetVariable(natoPlayersOnCapturePoint(eventCapturePoint), mod.AppendToArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)) , eventPlayer))
     }
@@ -231,7 +231,7 @@ export function OnPlayerDied(eventPlayer: mod.Player,eventOtherPlayer: mod.Playe
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
     const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer)) 
     if(playerFlag != -1) {
-        OnPlayerEnterCapturePoint(eventPlayer, mod.ValueInArray(mod.AllCapturePoints(), playerFlag))
+        OnPlayerEnterCapturePoint(eventPlayer, mod.ValueInArray(mod.AllCapturePoints(), playerFlag), true)
     }
 }
 export function OnMandown(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
