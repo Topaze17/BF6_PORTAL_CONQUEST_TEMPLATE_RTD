@@ -1,7 +1,7 @@
 //change to "modlib" when charging on serv
-import * as modlib from "./modlib"
+import * as modlib from "modlib"
 //comment out when charging to serv
-import * as mod from "./types/mod/index";
+// import * as mod from "./types/mod/index";
 
 
 
@@ -638,14 +638,11 @@ function SetFlagBlink(flag : number, bool: boolean) {
         }
 }
 function SetupFlagAudio() {
-    //6 second sound
-    // SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnExit_OneShot2D
     const onNeutralize = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Notification_ObjectiveSecured_FillIn_Neutral_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
     const onCaptureByAlly = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Notification_ObjectiveSecured_FillIn_Positive_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
     const onExist = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnExit_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
     const onEnter = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_ObjectiveOnEnter_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
     const onContestedLoop = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_OnContested_SimpleLoop2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
-    //tick sound
     const tickAlly = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTickIcon_IsFriendly_OneShot2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
     const tickEnemyLoop = mod.SpawnObject(mod.RuntimeSpawn_Common.SFX_UI_Gamemode_Shared_CaptureObjectives_CapturingTick_IsEnemy_SimpleLoop2D, mod.CreateVector(0,0,0), mod.CreateVector(0,0,0), mod.CreateVector(1,1,1))
     let soundArray = mod.EmptyArray()
@@ -1071,7 +1068,6 @@ function MakeOnFlagUiLayer(player : mod.Player) {
     const capturePointMsg = mod.FindUIWidgetWithName(mod.stringkeys.capture_point_msg, contestLine)
 
     // --- Array Compilation ---
-    // Added: allyOutline, allyInside, neutralOutline, neutralInside, enemyOutline, enemyInside
     let widgetsArray = mod.EmptyArray()
     widgetsArray = mod.AppendToArray(widgetsArray, highestUiLayer) //0
     widgetsArray = mod.AppendToArray(widgetsArray, allyUiLayer) //1
