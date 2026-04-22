@@ -16,4 +16,5 @@ I want to create this template because I know some people do not take the step t
 **Using This Template:**
 
 If you want to use this template, note that the script contains a modifiable variables section at the top that you can play with to suit your needs.
+
 Regarding the flag logic: I have intentionally kept the logic used in the Andy template. The goal is to make this "plug-and-play" for people already using his system. After all, if a specific logic works perfectly, why change it?
