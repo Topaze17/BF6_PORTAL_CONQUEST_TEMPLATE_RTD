@@ -69,7 +69,8 @@ function capturePointProgressDirection(capturePoint : mod.CapturePoint) : mod.Va
 function onFlagPlayerWidgets(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 1)}
 function playerUiAnchor(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 2)}
 function playerIsOnFlag(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 4)}
-function playerWasInjuredOnflag(player : mod.Player) : mod.Variable {return mod.ObjectVariable(player, 3)}
+
+
 //Team
 function teamFlags(team : Team) : mod.Variable { return mod.ObjectVariable(mod.GetTeam(team), 1)}
 function teamFlagsUi(team : Team) : mod.Variable { return mod.ObjectVariable(mod.GetTeam(team), 2)}
@@ -152,21 +153,23 @@ export function OnCapturePointCaptured(eventCapturePoint: mod.CapturePoint): voi
     SetFlagBlink(flag, false);
     NotifyOnFlagPlayersOfStateChange(eventCapturePoint)
 }
-export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint): void {
+export function OnPlayerExitCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint, byPassDownCheck: boolean = false): void {
+    if(mod.GetVariable(playerIsOnFlag(eventPlayer)) == -1) return
     const playerId = mod.GetObjId(eventPlayer)
     mod.SetVariable(playerIsOnFlag(eventPlayer), -1)
+    if (mod.GetSoldierState(eventPlayer, mod.SoldierStateBool.IsManDown) && !byPassDownCheck) return
     const soundArray = mod.GetVariable(capturePointSound)
     const tickEnemySfx = mod.ValueInArray(soundArray, 1)
     const contestSfx = mod.ValueInArray(soundArray, 2)
     mod.StopSound(tickEnemySfx, eventPlayer)
     mod.StopSound(contestSfx, eventPlayer)
+    removeFromViewOnFlagLayer(eventPlayer)
     if(mod.GetObjId(mod.GetTeam(eventPlayer)) == Team.Nato) {
         mod.SetVariable(natoPlayersOnCapturePoint(eventCapturePoint), modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)) , (currentElement) => mod.GetObjId(currentElement) != playerId))
     }
     else {
         mod.SetVariable(paxPlayersOnCapturePoint(eventCapturePoint), modlib.FilteredArray(mod.GetVariable(paxPlayersOnCapturePoint(eventCapturePoint)) , (currentElement) => mod.GetObjId(currentElement) != playerId))
     }
-    removeFromViewOnFlagLayer(eventPlayer)
     NotifyFlagOfPopulationChange(eventCapturePoint)
 }
 
@@ -183,9 +186,10 @@ export async function OngoingCapturePoint(eventCapturePoint: mod.CapturePoint): 
     }
     await mod.Wait(0.1)
 }
-export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint): void {
+export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCapturePoint: mod.CapturePoint, byPassDownCheck: boolean = false): void {
     const flag = mod.GetVariable(flagOfCapturePoint(eventCapturePoint))
     mod.SetVariable(playerIsOnFlag(eventPlayer), flag)
+    if (!mod.GetSoldierState(eventPlayer, mod.SoldierStateBool.IsAlive) && !byPassDownCheck) return 
     if(mod.GetObjId(mod.GetTeam(eventPlayer)) == Team.Nato) {
         mod.SetVariable(natoPlayersOnCapturePoint(eventCapturePoint), mod.AppendToArray(mod.GetVariable(natoPlayersOnCapturePoint(eventCapturePoint)) , eventPlayer))
     }
@@ -200,7 +204,6 @@ export function OnPlayerEnterCapturePoint(eventPlayer: mod.Player, eventCaptureP
 //------Player Function--------//
 export function OnPlayerJoinGame(eventPlayer: mod.Player): void {
     mod.SetVariable(playerIsOnFlag(eventPlayer), -1)
-    mod.SetVariable(playerWasInjuredOnflag(eventPlayer), -1)
     MakeUiAnchorPlayer(eventPlayer)
     MakeOnFlagUiLayer(eventPlayer)
 }
@@ -209,31 +212,30 @@ export function OnPlayerDeployed(eventPlayer: mod.Player): void {
         mod.SetTeam(eventPlayer, mod.GetTeam(Team.Pax))
     }
 }
+export function OnPlayerUndeploy(eventPlayer: mod.Player): void {
+    mod.SetVariable(playerIsOnFlag(eventPlayer), -1)
+}
 export function OnPlayerLeaveGame(eventNumber: number): void {
     if(mod.GetVariable(isGameModeReady) != 1) return
     RemoveInvalidPlayerFromFlag()
 }
 export function OnPlayerDied(eventPlayer: mod.Player,eventOtherPlayer: mod.Player,eventDeathType: mod.DeathType,eventWeaponUnlock: mod.WeaponUnlock): void {
-    RemovePlayerFromCapturePointIfNecessary(eventPlayer)
+    const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer))
+    if(playerFlag != -1) {
+        OnPlayerExitCapturePoint(eventPlayer, mod.ValueInArray(mod.AllCapturePoints(), playerFlag), true)
+        if(mod.GetSoldierState(eventPlayer, mod.SoldierStateBool.IsManDown)) {
+            mod.SetVariable(playerIsOnFlag(eventPlayer), playerFlag)
+        }
+    }
 }
 export function OnRevived(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
     const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer)) 
     if(playerFlag != -1) {
-        DisplayOnFlagLayer(eventPlayer, playerFlag)
-        NotifyFlagOfPopulationChange(mod.ValueInArray(mod.AllCapturePoints(), playerFlag))
+        OnPlayerEnterCapturePoint(eventPlayer, mod.ValueInArray(mod.AllCapturePoints(), playerFlag), true)
     }
 }
 export function OnMandown(eventPlayer: mod.Player, eventOtherPlayer: mod.Player): void {
-    const playerFlag = mod.GetVariable(playerIsOnFlag(eventPlayer))
-    if(playerFlag != -1) {
-        const soundArray = mod.GetVariable(capturePointSound)
-        const tickEnemySfx = mod.ValueInArray(soundArray, 1)
-        const contestSfx = mod.ValueInArray(soundArray, 2)
-        mod.StopSound(tickEnemySfx, eventPlayer)
-        mod.StopSound(contestSfx, eventPlayer)
-        removeFromViewOnFlagLayer(eventPlayer)
-        NotifyFlagOfPopulationChange(mod.ValueInArray(mod.AllCapturePoints(), playerFlag))
-    }
+
 }
 export function OnPlayerEarnedKill( eventPlayer: mod.Player,eventOtherPlayer: mod.Player,eventDeathType: mod.DeathType,eventWeaponUnlock: mod.WeaponUnlock): void {
     if(mod.GetObjId(eventPlayer) != mod.GetObjId(eventOtherPlayer)) {
@@ -343,8 +345,8 @@ async function SoundOnFlag(capturePoint: mod.CapturePoint) {
         let capturePointProgress = mod.GetCaptureProgress(capturePoint)
         const currentDirection = mod.GetVariable(capturePointProgressDirection(capturePoint))
         const isMoving = mod.GetVariable(capturePointProgressMovement(capturePoint))
-        const natoPlayers = modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
-        const paxPlayers = modlib.FilteredArray(mod.GetVariable(paxPlayersOnCapturePoint(capturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
+        const natoPlayers = mod.GetVariable(natoPlayersOnCapturePoint(capturePoint))
+        const paxPlayers = mod.GetVariable(paxPlayersOnCapturePoint(capturePoint))
         
         if(isMoving) {
             if(currentDirection == Team.Nato) {
@@ -472,34 +474,34 @@ function NotifyPlayerUiOfFlagCaptureState(capturePoint : mod.CapturePoint) {
 function NotifyFlagOfPopulationChange(capturePoint : mod.CapturePoint) {
     const flag = mod.GetVariable(flagOfCapturePoint(capturePoint))
     const capturePointOwner = mod.ValueInArray(mod.GetVariable(flagsOwner), flag)
-    const nbNatoPlayersNotDown = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown))))
-    const nbPaxPlayersNotDown = mod.CountOf(modlib.FilteredArray(mod.GetVariable(paxPlayersOnCapturePoint(capturePoint)), (player) => mod.Not(mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown))))
+    const nbNatoPlayers = mod.CountOf(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)))
+    const nbPaxPlayers = mod.CountOf(mod.GetVariable(paxPlayersOnCapturePoint(capturePoint)))
     if(mod.ValueInArray(mod.GetVariable(isFlagBlinking), flag)) {
-        if(capturePointOwner == Team.Nato &&  nbPaxPlayersNotDown == 0) {
+        if(capturePointOwner == Team.Nato &&  nbPaxPlayers == 0) {
             SetFlagBlink(flag, false)
         }
-        else if(capturePointOwner == Team.Pax &&  nbNatoPlayersNotDown == 0) {
+        else if(capturePointOwner == Team.Pax &&  nbNatoPlayers == 0) {
             SetFlagBlink(flag, false)
         }
-        else if(nbNatoPlayersNotDown == 0 && nbPaxPlayersNotDown == 0){
+        else if(nbNatoPlayers == 0 && nbPaxPlayers == 0){
             SetFlagBlink(flag, false)
         }
     }
     else {
-        if(capturePointOwner == Team.Nato &&  nbPaxPlayersNotDown != 0) {
+        if(capturePointOwner == Team.Nato &&  nbPaxPlayers != 0) {
             SetFlagBlink(flag, true)
         }
-        else if(capturePointOwner == Team.Pax &&  nbNatoPlayersNotDown != 0) {
+        else if(capturePointOwner == Team.Pax &&  nbNatoPlayers != 0) {
             SetFlagBlink(flag, true)
         }
-        else if(capturePointOwner == Team.Neutral && (nbNatoPlayersNotDown != 0 || nbPaxPlayersNotDown != 0)){
+        else if(capturePointOwner == Team.Neutral && (nbNatoPlayers != 0 || nbPaxPlayers != 0)){
             SetFlagBlink(flag, true)
         }
     }
-    if(nbNatoPlayersNotDown > nbPaxPlayersNotDown) {
+    if(nbNatoPlayers > nbPaxPlayers) {
         mod.SetVariable(capturePointProgressDirection(capturePoint), Team.Nato)
     }
-    else if(nbPaxPlayersNotDown > nbNatoPlayersNotDown) {
+    else if(nbPaxPlayers > nbNatoPlayers) {
         mod.SetVariable(capturePointProgressDirection(capturePoint), Team.Pax)
     }
     else {
@@ -511,12 +513,10 @@ function NotifyPlayersOfPopulationChangeOnFlag(capturePoint: mod.CapturePoint) {
     const flag = mod.GetVariable(flagOfCapturePoint(capturePoint))
     const natoPlayers = mod.GetVariable(natoPlayersOnCapturePoint(capturePoint))
     const paxPlayers = mod.GetVariable(paxPlayersOnCapturePoint(capturePoint))
-    const nbNatoDownPlayers = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
-    const nbPaxDownPlayers = mod.CountOf(modlib.FilteredArray(mod.GetVariable(natoPlayersOnCapturePoint(capturePoint)), (player) => mod.GetSoldierState(player, mod.SoldierStateBool.IsManDown)))
     const nbNatoPlayers = mod.CountOf(natoPlayers)
     const nbPaxPlayers = mod.CountOf(paxPlayers)
-    ForEach(natoPlayers, (player) => UpdatePlayerOnFlagLayer(player, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag))
-    ForEach(paxPlayers, (player) => UpdatePlayerOnFlagLayer(player, nbPaxPlayers - nbPaxDownPlayers, nbNatoPlayers - nbNatoDownPlayers, flag))
+    ForEach(natoPlayers, (player) => UpdatePlayerOnFlagLayer(player, nbPaxPlayers , nbNatoPlayers , flag))
+    ForEach(paxPlayers, (player) => UpdatePlayerOnFlagLayer(player, nbPaxPlayers , nbNatoPlayers , flag))
 }
 
 //-----SET FUNCTION----//
@@ -1113,46 +1113,12 @@ function RemoveInvalidPlayerFromFlag() {
         }
     }
 }
-function RemovePlayerFromCapturePointIfNecessary(player : mod.Player) : number{
-    const playerFlag = mod.GetVariable(playerIsOnFlag(player))
-    if(playerFlag != -1) {
-        const soundArray = mod.GetVariable(capturePointSound)
-        const tickEnemySfx = mod.ValueInArray(soundArray, 1)
-        const contestSfx = mod.ValueInArray(soundArray, 2)
-        mod.StopSound(tickEnemySfx, player)
-        mod.StopSound(contestSfx, player)
-        const playerId = mod.GetObjId(player)
-        const capturePoints = mod.AllCapturePoints()
-        const playerTeamId = mod.GetObjId(mod.GetTeam(player))
-        const currCapturePoint = mod.ValueInArray(capturePoints, playerFlag)
-            let capturePointPlayersArray = mod.EmptyArray()
-            if(playerTeamId == Team.Nato) {
-                capturePointPlayersArray = mod.GetVariable(natoPlayersOnCapturePoint(currCapturePoint))
-            }
-            else {
-                capturePointPlayersArray = mod.GetVariable(paxPlayersOnCapturePoint(currCapturePoint))
-            }
-            capturePointPlayersArray = modlib.FilteredArray(capturePointPlayersArray, (other) => mod.GetObjId(other) != playerId)
-            if(playerTeamId == Team.Nato) {
-                mod.SetVariable(natoPlayersOnCapturePoint(currCapturePoint), capturePointPlayersArray)
-            }
-            else {
-                mod.SetVariable(paxPlayersOnCapturePoint(currCapturePoint), capturePointPlayersArray)
-            }
-            const flag = mod.GetVariable(flagOfCapturePoint(currCapturePoint))
-            NotifyFlagOfPopulationChange(currCapturePoint)
-            removeFromViewOnFlagLayer(player)
-            return flag
-        
-        }
-    return -1
-}
 
 
 function GameWin(team : Team) {
     mod.EndGameMode(mod.GetTeam(team))
-    mod.PlayMusic(mod.MusicEvents.Core_Stop)
     mod.PlayMusic(mod.MusicEvents.Core_EndOfRound_Loop)
+   
 }
 //------------Utility Function---------------//
 export function ForEach(array: mod.Array, fun: (currentElement: any) => any): void {
