@@ -1,7 +1,7 @@
 //change to "modlib" when charging on serv
-import * as modlib from "modlib"
+import * as modlib from "./modlib"
 //comment out when charging to serv
-// import * as mod from "./types/mod/index";
+import * as mod from "./types/mod/index";
 
 
 
